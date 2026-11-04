@@ -1,19 +1,73 @@
 {% extends "loyalty_programm/base.html" %}
+{% block title %}Поиск клиента — Loyalty Admin{% endblock %}
+{% block extra_head %}
+<style>
+.search-form{
+  display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
+}
+.search-form .field{flex:1; min-width:240px}
+.search-form .btn-search{
+  padding:12px 28px;
+  font-size:16px;
+  font-weight:700;
+  min-height:46px;
+  border-radius:11px;
+}
+.hint{font-size:13px; color:var(--muted); margin-top:10px}
+.result-header{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  flex-wrap:wrap; margin-bottom:16px;
+}
+.result-header .info{display:flex; flex-direction:column; gap:4px}
+.result-header .info .phone{color:var(--muted); font-size:14px}
+.result-header .bal{
+  display:inline-flex; align-items:baseline; gap:6px;
+  padding:8px 14px; background:var(--green-bg); color:#0a6a3d;
+  border-radius:11px; font-weight:800; font-size:15px;
+}
+.result-header .bal b{font-size:20px}
+
+/* на мобилке — кнопка на всю ширину */
+@media (max-width:520px){
+  .search-form .btn-search{width:100%}
+}
+</style>
+{% endblock %}
 {% block content %}
-<h2>Поиск клиента</h2>
-<form method="get">
-  <input type="text" name="q" value="{{ query }}"
-         placeholder="+7 999 123-45-67, 89991234567, 9991234567">
-  <button type="submit">Найти</button>
-</form>
+<h1>Поиск клиента</h1>
+
+<div class="card">
+  <form method="get" class="search-form">
+    <div class="field">
+      <label>Номер телефона</label>
+      <input type="text" name="q" value="{{ query }}"
+             placeholder="+7 999 123-45-67 / 89991234567 / 9991234567"
+             autofocus>
+    </div>
+    <button class="btn btn-search" type="submit">🔎 Найти</button>
+  </form>
+  <div class="hint">Можно вводить в любом формате: с пробелами, 8…, +7…, 9…</div>
+</div>
+
 {% if client %}
-  <hr>
-  <h3>{{ client.name }}
-    {% if client.is_bot_admin %}<span class="badge admin">АДМИН БОТА</span>{% endif %}
-    <span class="badge {{ client.status }}">{{ client.get_status_display }}</span>
-  </h3>
-  <p>Телефон: <b>{{ client.phone }}</b><br>
-     Баланс: <b>{{ client.balance }} бонусов</b></p>
-  <a class="btn" href="{% url 'client' client.pk %}">Открыть карточку</a>
+<div class="card">
+  <div class="result-header">
+    <div class="info">
+      <h2 style="margin:0">{{ client.name }}
+        {% if client.is_bot_admin %}<span class="badge admin dot">АДМИН БОТА</span>{% endif %}
+        {% if client.is_blocked %}<span class="badge blocked dot">ЗАБЛОКИРОВАН</span>
+        {% else %}<span class="badge client dot">{{ client.get_status_display }}</span>{% endif %}
+      </h2>
+      <span class="phone">📞 {{ client.phone }}</span>
+    </div>
+    <div class="bal">💳 Баланс: <b>{{ client.balance }}</b></div>
+  </div>
+  <a class="btn" href="{% url 'client' client.pk %}">Открыть карточку →</a>
+</div>
+{% elif query %}
+<div class="empty">
+  <span class="icon">🔍</span>
+  Клиент с номером <b>{{ query }}</b> не найден
+</div>
 {% endif %}
 {% endblock %}

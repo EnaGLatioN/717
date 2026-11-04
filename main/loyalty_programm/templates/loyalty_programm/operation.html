@@ -1,15 +1,106 @@
 {% extends "loyalty_programm/base.html" %}
+{% block title %}{% if op_type == "accrual" %}Начислить{% else %}Списать{% endif %} — Loyalty Admin{% endblock %}
+{% block extra_head %}
+<style>
+.op-wrap{max-width:560px; margin:0 auto}
+.op-header{
+  display:flex; align-items:center; gap:16px; margin-bottom:24px;
+}
+.op-icon{
+  width:56px; height:56px; border-radius:16px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; font-weight:800; color:#fff;
+}
+.op-icon.accrual{background:linear-gradient(135deg,#1fd682,#18b26b); box-shadow:0 8px 24px rgba(24,178,107,.35)}
+.op-icon.write_off{background:linear-gradient(135deg,#ff6a6a,#e14545); box-shadow:0 8px 24px rgba(225,69,69,.35)}
+.op-header h1{margin:0; font-size:22px}
+.op-header .sub{color:var(--muted); font-size:14px; margin-top:2px}
+.op-client{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px 18px; background:#fafbfe; border-radius:12px;
+  border:1px solid var(--line); margin-bottom:20px;
+  flex-wrap:wrap;
+}
+.op-client .name{font-weight:700}
+.op-client .phone{color:var(--muted); font-size:14px}
+.op-client .bal{font-weight:800; color:var(--green)}
+.amount-preview{
+  display:none; margin-top:14px; padding:14px 18px;
+  background:#fafbfe; border-radius:12px;
+  border:1px solid var(--line); font-size:15px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.amount-preview .result{font-weight:800; font-size:18px}
+.actions{display:flex; gap:10px; margin-top:20px; flex-wrap:wrap}
+</style>
+{% endblock %}
 {% block content %}
-<h2>{% if op_type == "accrual" %}Начислить{% else %}Списать{% endif %} —
-    {{ client.name }} ({{ client.phone }})</h2>
-<p>Текущий баланс: <b>{{ client.balance }}</b></p>
-<form method="post">{% csrf_token %}
-  <p><label>Сумма<br>
-    <input type="number" name="amount" min="1" required></label></p>
-  <p><label>Комментарий (необязательно)<br>
-    <input type="text" name="comment"
-           placeholder="{% if op_type == 'accrual' %}чек 1500{% else %}оплата бонусами{% endif %}"></label></p>
-  <button type="submit">{% if op_type == "accrual" %}Начислить{% else %}Списать{% endif %}</button>
-  <a class="btn" href="{% url 'client' client.pk %}">Отмена</a>
-</form>
+<div class="op-wrap">
+
+  <div class="op-header">
+    <div class="op-icon {{ op_type }}">
+      {% if op_type == "accrual" %}＋{% else %}－{% endif %}
+    </div>
+    <div>
+      <h1>{% if op_type == "accrual" %}Начислить бонусы{% else %}Списать бонусы{% endif %}</h1>
+      <div class="sub">Операция сразу попадёт в историю</div>
+    </div>
+  </div>
+
+  <div class="op-client">
+    <div>
+      <div class="name">{{ client.name }}</div>
+      <div class="phone">{{ client.phone }}</div>
+    </div>
+    <div class="bal">Баланс: {{ client.balance }}</div>
+  </div>
+
+  <div class="card">
+    <form method="post" id="op-form">{% csrf_token %}
+      <div class="form-row">
+        <label>Сумма (целое число)</label>
+        <input type="number" name="amount" min="1" required
+               placeholder="например, 100"
+               id="amount-input" autofocus>
+      </div>
+      <div class="form-row">
+        <label>Комментарий <span style="color:#b0bac9">(необязательно)</span></label>
+        <input type="text" name="comment"
+               placeholder="{% if op_type == 'accrual' %}чек 1500{% else %}оплата бонусами{% endif %}"
+               maxlength="255">
+      </div>
+
+      <div class="amount-preview" id="preview">
+        <span>Новый баланс:</span>
+        <span class="result" id="preview-result">—</span>
+      </div>
+
+      <div class="actions">
+        <button class="btn {% if op_type == 'accrual' %}green{% else %}red{% endif %}" type="submit">
+          {% if op_type == "accrual" %}Начислить{% else %}Списать{% endif %}
+        </button>
+        <a class="btn grey" href="{% url 'client' client.pk %}">Отмена</a>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var cur = {{ client.balance }};
+  var opType = "{{ op_type }}";
+  var inp = document.getElementById('amount-input');
+  var prev = document.getElementById('preview');
+  var prevRes = document.getElementById('preview-result');
+  inp.addEventListener('input', function(){
+    var v = parseInt(inp.value, 10);
+    if (!v || v <= 0) { prev.style.display = 'none'; return; }
+    var res = opType === 'accrual' ? cur + v : cur - v;
+    prevRes.textContent = res + ' бонусов';
+    prevRes.style.color = (opType === 'accrual') ? '#18b26b' : (res < 0 ? '#e14545' : '#e14545');
+    prev.style.display = 'flex';
+  });
+})();
+</script>
 {% endblock %}

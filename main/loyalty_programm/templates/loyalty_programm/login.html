@@ -1,9 +1,47 @@
 {% extends "loyalty_programm/base.html" %}
+{% block title %}Вход — Loyalty Admin{% endblock %}
+{% block extra_head %}
+<style>
+.login-wrap{
+  max-width:420px; margin:80px auto;
+}
+.login-card{
+  background:#fff; border-radius:20px; padding:40px;
+  box-shadow:0 20px 60px rgba(21,32,64,.12), 0 4px 16px rgba(21,32,64,.06);
+  border:1px solid var(--line);
+}
+.login-card .logo{
+  width:56px; height:56px; border-radius:16px; margin:0 auto 20px;
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:28px; font-weight:800;
+  box-shadow:0 8px 24px rgba(91,108,255,.35);
+}
+.login-card h2{text-align:center; margin-bottom:6px; font-size:22px}
+.login-card p.sub{text-align:center; color:var(--muted); font-size:14px; margin:0 0 28px}
+.login-card .btn{width:100%; justify-content:center; margin-top:8px}
+</style>
+{% endblock %}
 {% block content %}
-<h2>Вход в админку</h2>
-<form method="post">{% csrf_token %}
-  <p><label>Логин<br><input type="text" name="username" required></label></p>
-  <p><label>Пароль<br><input type="password" name="password" required></label></p>
-  <button type="submit">Войти</button>
-</form>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="logo">◈</div>
+    <h2>Вход в админку</h2>
+    <p class="sub">Введите логин и пароль</p>
+    <form method="post">{% csrf_token %}
+      {% if form.errors %}
+        <div class="msg error">Неверный логин или пароль</div>
+      {% endif %}
+      <div class="form-row">
+        <label>Логин</label>
+        <input type="text" name="username" required autofocus autocomplete="username">
+      </div>
+      <div class="form-row">
+        <label>Пароль</label>
+        <input type="password" name="password" required autocomplete="current-password">
+      </div>
+      <button class="btn" type="submit">Войти</button>
+    </form>
+  </div>
+</div>
 {% endblock %}

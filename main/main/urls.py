@@ -1,11 +1,15 @@
 from django.contrib import admin
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from django.views.generic import RedirectView
 
 from loyalty_programm import views as loyalty_views
 
 
 urlpatterns = [
+    # Редирект с корня на админку лояльности
+    path("", RedirectView.as_view(url="/loyalty/", permanent=False)),
+
     # Django-админка (суперюзер) — там галочка «Админ бота»
     path("admin/", admin.site.urls),
 
@@ -20,7 +24,10 @@ urlpatterns = [
     ),
     path(
         "loyalty/logout/",
-        auth_views.LogoutView.as_view(next_page="login"),
+        auth_views.LogoutView.as_view(
+            next_page="login",
+            http_method_names=["get", "post", "options"],
+        ),
         name="logout",
     ),
     path("loyalty/client/<int:pk>/", loyalty_views.client_detail, name="client"),

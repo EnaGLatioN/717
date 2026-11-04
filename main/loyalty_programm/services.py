@@ -23,21 +23,31 @@ def format_phone(phone: str) -> str:
 
 
 def get_or_create_client(telegram_id: int, name: str, phone: str):
+    """
+    Возвращает (client, created, conflict), где conflict — чужой Client,
+    если этот номер уже занят другим telegram_id.
+    """
     phone = normalize_phone(phone)
+
+    # 1) по telegram_id
     client = Client.objects.filter(telegram_id=telegram_id).first()
     if client:
-        if client.phone != phone:
-            client.phone = phone
-            client.save(update_fields=["phone"])
-        return client, False
+        if client.phone == phone:
+            return client, False, None
+        other = Client.objects.filter(phone=phone).exclude(pk=client.pk).first()
+        if other:
+            return client, False, other
+        client.phone = phone
+        client.save(update_fields=["phone"])
+        return client, False, None
 
-    client = Client.objects.filter(phone=phone).first()
-    if client:
-        client.telegram_id = telegram_id
-        client.save(update_fields=["telegram_id"])
-        return client, False
+    # 2) новый telegram_id — номер занят?
+    by_phone = Client.objects.filter(phone=phone).first()
+    if by_phone:
+        return None, False, by_phone
 
-    return Client.objects.create(telegram_id=telegram_id, name=name, phone=phone), True
+    client = Client.objects.create(telegram_id=telegram_id, name=name, phone=phone)
+    return client, True, None
 
 
 def is_tg_admin(telegram_id: int) -> bool:

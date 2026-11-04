@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: loyalty_app
+    volumes:
+      - .:/application
+      - ./main/main/db.sqlite3:/application/main/main/db.sqlite3
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped

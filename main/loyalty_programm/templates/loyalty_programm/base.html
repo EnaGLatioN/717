@@ -1,30 +1,234 @@
-<!doctype html>
-<html lang="ru"><head>
-<meta charset="utf-8"><title>Лояльность — админка</title>
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Лояльность — админка{% endblock %}</title>
 <style>
- body{font-family:sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
- table{width:100%;border-collapse:collapse;margin:1em 0}
- th,td{border:1px solid #ccc;padding:.4em .6em;text-align:left}
- .msg{padding:.6em;margin:.4em 0;border-radius:4px}
- .success{background:#dfd}.error{background:#fdd}
- a.btn,button{padding:.5em 1em;background:#2a6;color:#fff;border:0;
-              border-radius:4px;text-decoration:none;cursor:pointer;display:inline-block}
- a.btn.red,button.red{background:#c33}
- a.btn.grey{background:#888}
- input[type=text],input[type=number]{padding:.4em;width:100%;max-width:400px}
- .badge{display:inline-block;padding:.15em .5em;border-radius:4px;color:#fff;font-size:.85em}
- .badge.admin{background:#28a}.badge.client{background:#2a6}.badge.blocked{background:#c33}
-</style></head><body>
-<nav>
-  <a href="{% url 'search' %}">Поиск</a>
-  {% if user.is_authenticated %} |
-    {{ user.username }} |
-    <a href="{% url 'logout' %}">Выйти</a>
-  {% else %} |
-    <a href="{% url 'login' %}">Войти</a>
-  {% endif %}
-</nav>
-<hr>
-{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
-{% block content %}{% endblock %}
-</body></html>
+:root{
+  --bg:#f6f8fb; --card:#ffffff; --text:#1a2233; --muted:#6b7a90;
+  --line:#e6ecf5; --primary:#5b6cff; --primary-2:#8a5bff;
+  --green:#18b26b; --green-bg:#e7f8ee;
+  --red:#e14545; --red-bg:#fdeaea;
+  --amber:#f0a032; --amber-bg:#fef4e4;
+  --blue:#2f7dff; --blue-bg:#e9f1ff;
+  --shadow:0 4px 20px rgba(21,32,64,.06),0 1px 3px rgba(21,32,64,.04);
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+  color:var(--text); background:var(--bg);
+  min-height:100vh; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ====== header ====== */
+header{
+  position:sticky; top:0; z-index:10;
+  background:rgba(255,255,255,.85); backdrop-filter:saturate(180%) blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.header-inner{
+  max-width:1040px; margin:0 auto; padding:14px 24px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-weight:800; font-size:18px; color:var(--text);
+}
+.brand .dot{
+  width:30px;height:30px;border-radius:9px;
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+  box-shadow:0 4px 12px rgba(91,108,255,.35);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;
+}
+.nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px}
+.nav a{
+  padding:6px 12px;border-radius:9px;color:var(--muted);
+  font-weight:500;
+}
+.nav a:hover{background:#eef1f8;color:var(--text);text-decoration:none}
+.nav .me{
+  color:var(--text); font-weight:600;
+  padding:6px 10px; background:#eef1f8; border-radius:9px;
+}
+.nav form{display:inline;margin:0}
+.nav-logout{
+  background:transparent; border:0; padding:6px 12px;
+  border-radius:9px; color:var(--muted); font:inherit;
+  font-size:14px; font-weight:500; cursor:pointer;
+}
+.nav-logout:hover{background:#eef1f8; color:var(--text)}
+
+/* ====== main ====== */
+main{
+  max-width:1040px; margin:32px auto; padding:0 24px 64px;
+}
+h1,h2,h3{margin:0 0 16px; color:var(--text); letter-spacing:-.01em}
+h1{font-size:28px; font-weight:800}
+h2{font-size:22px; font-weight:800}
+h3{font-size:16px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+
+/* ====== card ====== */
+.card{
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--radius); box-shadow:var(--shadow);
+  padding:24px; margin-bottom:20px;
+}
+
+/* ====== forms ====== */
+label{display:block; font-size:13px; color:var(--muted); font-weight:600; margin-bottom:6px}
+input[type=text],input[type=password],input[type=number],input[type=email]{
+  width:100%; padding:12px 14px; font-size:15px;
+  border:1.5px solid var(--line); border-radius:11px;
+  background:#fbfcfe; color:var(--text); transition:.15s;
+  font-family:inherit;
+}
+input:focus{
+  outline:none; border-color:var(--primary); background:#fff;
+  box-shadow:0 0 0 4px rgba(91,108,255,.12);
+}
+.form-row{margin-bottom:16px}
+
+/* ====== buttons ====== */
+.btn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:11px 18px; font-size:14px; font-weight:600;
+  border:0; border-radius:11px; cursor:pointer;
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+  color:#fff; text-decoration:none;
+  transition:.15s; font-family:inherit;
+  box-shadow:0 4px 14px rgba(91,108,255,.35);
+}
+.btn:hover{text-decoration:none; transform:translateY(-1px); box-shadow:0 6px 18px rgba(91,108,255,.45)}
+.btn:active{transform:translateY(0)}
+.btn.red{background:linear-gradient(135deg,#ff6a6a,#e14545); box-shadow:0 4px 14px rgba(225,69,69,.35)}
+.btn.green{background:linear-gradient(135deg,#1fd682,#18b26b); box-shadow:0 4px 14px rgba(24,178,107,.35)}
+.btn.grey{background:#eef1f8; color:var(--text); box-shadow:none}
+.btn.grey:hover{background:#e1e7f2}
+.btn.ghost{background:transparent; color:var(--primary); box-shadow:none; padding:8px 12px}
+.btn.ghost:hover{background:#eef1f8}
+
+/* ====== messages ====== */
+.msg{
+  padding:12px 16px; margin-bottom:12px; border-radius:11px;
+  font-size:14px; display:flex; align-items:center; gap:10px;
+  border:1px solid transparent;
+}
+.msg::before{font-size:16px; line-height:1}
+.msg.success{background:var(--green-bg); color:#0a6a3d; border-color:#c6f0d6}
+.msg.success::before{content:"✓"}
+.msg.error{background:var(--red-bg); color:#8c1a1a; border-color:#f8cccc}
+.msg.error::before{content:"✕"}
+.msg.info{background:var(--blue-bg); color:#1a4fa8; border-color:#c9dcff}
+.msg.info::before{content:"ℹ"}
+
+/* ====== badges ====== */
+.badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:999px;
+  font-size:12px; font-weight:700; letter-spacing:.02em;
+}
+.badge.admin{background:var(--blue-bg); color:#1a4fa8}
+.badge.client{background:var(--green-bg); color:#0a6a3d}
+.badge.blocked{background:var(--red-bg); color:#8c1a1a}
+.badge.dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* ====== table ====== */
+.table-wrap{overflow-x:auto; border-radius:var(--radius); border:1px solid var(--line)}
+table{width:100%; border-collapse:collapse; font-size:14px; background:#fff}
+th,td{padding:13px 16px; text-align:left; border-bottom:1px solid var(--line)}
+th{font-weight:700; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; background:#fafbfe}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#fafbff}
+.amount-plus{color:var(--green); font-weight:700}
+.amount-minus{color:var(--red); font-weight:700}
+.mono{font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+
+/* ====== client card ====== */
+.client-hero{
+  background:linear-gradient(135deg,#5b6cff 0%,#8a5bff 100%);
+  color:#fff; border-radius:var(--radius);
+  padding:28px; margin-bottom:20px;
+  box-shadow:0 10px 40px rgba(91,108,255,.3);
+  position:relative; overflow:hidden;
+}
+.client-hero::after{
+  content:""; position:absolute; top:-60px; right:-60px;
+  width:200px; height:200px; border-radius:50%;
+  background:rgba(255,255,255,.12);
+}
+.client-hero h1{color:#fff; margin-bottom:6px; position:relative}
+.client-hero .meta{opacity:.85; font-size:14px; margin-bottom:18px; position:relative}
+.hero-balance{
+  display:inline-flex; align-items:baseline; gap:8px;
+  background:rgba(255,255,255,.18); padding:12px 20px; border-radius:12px;
+  font-size:14px; position:relative; backdrop-filter:blur(8px);
+}
+.hero-balance b{font-size:32px; font-weight:800; line-height:1}
+.hero-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; position:relative}
+.hero-actions .btn{background:#fff; color:var(--primary); box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.hero-actions .btn:hover{background:#f5f6ff}
+.hero-actions .btn.red{background:#fff; color:var(--red)}
+.hero-actions .btn.grey{background:rgba(255,255,255,.2); color:#fff; box-shadow:none}
+.hero-actions .btn.grey:hover{background:rgba(255,255,255,.3)}
+
+/* ====== empty ====== */
+.empty{
+  padding:40px 20px; text-align:center; color:var(--muted);
+  background:#fafbfe; border-radius:var(--radius);
+  border:1px dashed var(--line); font-size:14px;
+}
+.empty .icon{font-size:32px; display:block; margin-bottom:10px; opacity:.5}
+
+/* ====== responsive ====== */
+@media (max-width:640px){
+  .header-inner{padding:12px 16px}
+  main{padding:0 16px 40px; margin-top:20px}
+  .card{padding:18px}
+  .client-hero{padding:22px}
+  .hero-balance b{font-size:26px}
+  h1{font-size:24px}
+  .brand span:last-child{display:none}
+}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="brand" href="{% url 'search' %}">
+      <span class="dot">◈</span>
+      <span>Loyalty Admin</span>
+    </a>
+    <div class="nav">
+      <a href="{% url 'search' %}">🔎 Поиск</a>
+      <a href="/admin/" target="_blank">⚙ Django</a>
+      {% if user.is_authenticated %}
+        <span class="me">👤 {{ user.username }}</span>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="nav-logout">Выйти</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}">Войти</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<main>
+  {% for m in messages %}
+    <div class="msg {{ m.tags }}">{{ m }}</div>
+  {% endfor %}
+
+  {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>
