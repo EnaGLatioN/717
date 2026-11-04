@@ -1,0 +1,41 @@
+{% extends "loyalty_programm/base.html" %}
+{% block content %}
+<h2>{{ client.name }}
+  {% if client.is_bot_admin %}<span class="badge admin">АДМИН БОТА</span>{% endif %}
+  <span class="badge {{ client.status }}">{{ client.get_status_display }}</span>
+</h2>
+<p>Телефон: <b>{{ client.phone }}</b><br>
+   Баланс: <b>{{ client.balance }} бонусов</b><br>
+   Зарегистрирован: {{ client.created_at|date:"d.m.Y H:i" }}</p>
+
+<p>
+  <a class="btn" href="{% url 'operation' client.pk 'accrual' %}">+ Начислить</a>
+  <a class="btn red" href="{% url 'operation' client.pk 'write_off' %}">− Списать</a>
+  <form method="post" action="{% url 'toggle_admin' client.pk %}" style="display:inline">
+    {% csrf_token %}
+    <button type="submit" class="btn grey">
+      {% if client.is_bot_admin %}Убрать админку бота{% else %}Сделать админом бота{% endif %}
+    </button>
+  </form>
+</p>
+
+<h3>История операций</h3>
+<table>
+ <tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Было</th><th>Стало</th>
+     <th>Админ (веб)</th><th>TG бот</th><th>Комментарий</th></tr>
+ {% for op in operations %}
+ <tr>
+   <td>{{ op.created_at|date:"d.m.Y H:i" }}</td>
+   <td>{{ op.get_type_display }}</td>
+   <td>{% if op.type == "accrual" %}+{% else %}−{% endif %}{{ op.amount }}</td>
+   <td>{{ op.balance_before }}</td>
+   <td>{{ op.balance_after }}</td>
+   <td>{{ op.admin.username|default:"—" }}</td>
+   <td>{{ op.performed_by_tg|default:"—" }}</td>
+   <td>{{ op.comment }}</td>
+ </tr>
+ {% empty %}
+ <tr><td colspan="8">Операций пока нет</td></tr>
+ {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "loyalty_programm/base.html" %}
+{% block content %}
+<h2>{% if op_type == "accrual" %}Начислить{% else %}Списать{% endif %} —
+    {{ client.name }} ({{ client.phone }})</h2>
+<p>Текущий баланс: <b>{{ client.balance }}</b></p>
+<form method="post">{% csrf_token %}
+  <p><label>Сумма<br>
+    <input type="number" name="amount" min="1" required></label></p>
+  <p><label>Комментарий (необязательно)<br>
+    <input type="text" name="comment"
+           placeholder="{% if op_type == 'accrual' %}чек 1500{% else %}оплата бонусами{% endif %}"></label></p>
+  <button type="submit">{% if op_type == "accrual" %}Начислить{% else %}Списать{% endif %}</button>
+  <a class="btn" href="{% url 'client' client.pk %}">Отмена</a>
+</form>
+{% endblock %}

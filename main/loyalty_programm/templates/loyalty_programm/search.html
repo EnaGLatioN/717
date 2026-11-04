@@ -1,0 +1,19 @@
+{% extends "loyalty_programm/base.html" %}
+{% block content %}
+<h2>Поиск клиента</h2>
+<form method="get">
+  <input type="text" name="q" value="{{ query }}"
+         placeholder="+7 999 123-45-67, 89991234567, 9991234567">
+  <button type="submit">Найти</button>
+</form>
+{% if client %}
+  <hr>
+  <h3>{{ client.name }}
+    {% if client.is_bot_admin %}<span class="badge admin">АДМИН БОТА</span>{% endif %}
+    <span class="badge {{ client.status }}">{{ client.get_status_display }}</span>
+  </h3>
+  <p>Телефон: <b>{{ client.phone }}</b><br>
+     Баланс: <b>{{ client.balance }} бонусов</b></p>
+  <a class="btn" href="{% url 'client' client.pk %}">Открыть карточку</a>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><title>Лояльность — админка</title>
+<style>
+ body{font-family:sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
+ table{width:100%;border-collapse:collapse;margin:1em 0}
+ th,td{border:1px solid #ccc;padding:.4em .6em;text-align:left}
+ .msg{padding:.6em;margin:.4em 0;border-radius:4px}
+ .success{background:#dfd}.error{background:#fdd}
+ a.btn,button{padding:.5em 1em;background:#2a6;color:#fff;border:0;
+              border-radius:4px;text-decoration:none;cursor:pointer;display:inline-block}
+ a.btn.red,button.red{background:#c33}
+ a.btn.grey{background:#888}
+ input[type=text],input[type=number]{padding:.4em;width:100%;max-width:400px}
+ .badge{display:inline-block;padding:.15em .5em;border-radius:4px;color:#fff;font-size:.85em}
+ .badge.admin{background:#28a}.badge.client{background:#2a6}.badge.blocked{background:#c33}
+</style></head><body>
+<nav>
+  <a href="{% url 'search' %}">Поиск</a>
+  {% if user.is_authenticated %} |
+    {{ user.username }} |
+    <a href="{% url 'logout' %}">Выйти</a>
+  {% else %} |
+    <a href="{% url 'login' %}">Войти</a>
+  {% endif %}
+</nav>
+<hr>
+{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+{% block content %}{% endblock %}
+</body></html>
