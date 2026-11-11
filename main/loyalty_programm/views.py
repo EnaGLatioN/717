@@ -3,8 +3,10 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 
-from .models import Client
-from .services import normalize_phone, accrue, write_off
+from .models import Client, Visit, MinuteGrant
+from .services import (
+    normalize_phone, preview_visit, conduct_visit, cancel_visit, grant_minutes,
+)
 
 
 @login_required
@@ -26,40 +28,102 @@ def search(request):
 @login_required
 def client_detail(request, pk):
     client = get_object_or_404(Client, pk=pk)
-    operations = client.operations.order_by("-created_at")
-    return render(request, "loyalty_programm/client.html",
-                  {"client": client, "operations": operations})
+    visits = client.visits.order_by("-created_at")
+    grants = client.minute_grants.order_by("-created_at")
+    return render(request, "loyalty_programm/client.html", {
+        "client": client, "visits": visits, "grants": grants,
+        "next_level": client.next_level_info(),
+    })
 
 
 @login_required
-def client_operation(request, pk, op_type):
+def visit_create(request, pk):
+    """Форма визита. GET — форма; POST — саммари для подтверждения."""
     client = get_object_or_404(Client, pk=pk)
-    if op_type not in ("accrual", "write_off"):
+
+    if request.method == "POST" and request.POST.get("confirm") != "1":
+        # шаг 1 — расчёт и показ саммари
+        try:
+            price = int(request.POST.get("price", "0"))
+            bonuses = int(request.POST.get("bonuses_used", "0"))
+            minutes = int(request.POST.get("minutes_used", "0"))
+        except ValueError:
+            messages.error(request, "Цена, бонусы и минуты должны быть целыми числами")
+            return render(request, "loyalty_programm/visit_form.html", {"client": client})
+        comment = request.POST.get("comment", "").strip()
+        try:
+            summary = preview_visit(client, price, bonuses, minutes)
+        except ValidationError as e:
+            messages.error(request, e.message)
+            return render(request, "loyalty_programm/visit_form.html", {
+                "client": client, "form": request.POST,
+            })
+        return render(request, "loyalty_programm/visit_confirm.html", {
+            "client": client, "summary": summary, "comment": comment,
+            "form": request.POST,
+        })
+
+    if request.method == "POST" and request.POST.get("confirm") == "1":
+        # шаг 2 — подтверждено, пишем в БД
+        try:
+            price = int(request.POST.get("price", "0"))
+            bonuses = int(request.POST.get("bonuses_used", "0"))
+            minutes = int(request.POST.get("minutes_used", "0"))
+        except ValueError:
+            messages.error(request, "Некорректные данные")
+            return redirect("client", pk=pk)
+        comment = request.POST.get("comment", "").strip()
+        try:
+            visit = conduct_visit(client, price, bonuses, minutes,
+                                  admin=request.user, comment=comment)
+        except ValidationError as e:
+            messages.error(request, e.message)
+            return redirect("client", pk=pk)
+        messages.success(request, f"Визит сохранён: {visit.price} ₽, "
+                                   f"кэшбек {visit.cashback} бонусов")
         return redirect("client", pk=pk)
+
+    return render(request, "loyalty_programm/visit_form.html", {"client": client})
+
+
+@login_required
+def visit_cancel(request, pk, visit_pk):
+    client = get_object_or_404(Client, pk=pk)
+    visit = get_object_or_404(Visit, pk=visit_pk, client=client)
 
     if request.method == "POST":
         try:
-            amount = int(request.POST.get("amount", "0"))
-        except ValueError:
-            messages.error(request, "Сумма должна быть целым числом")
-            return render(request, "loyalty_programm/operation.html",
-                          {"client": client, "op_type": op_type})
-        comment = request.POST.get("comment", "").strip()
-        try:
-            if op_type == "accrual":
-                accrue(client, amount, request.user, comment)
-                messages.success(request, f"Начислено {amount} бонусов")
-            else:
-                write_off(client, amount, request.user, comment)
-                messages.success(request, f"Списано {amount} бонусов")
+            cancel_visit(visit)
+            messages.success(request, "Визит отменён, балансы восстановлены")
         except ValidationError as e:
             messages.error(request, e.message)
-            return render(request, "loyalty_programm/operation.html",
-                          {"client": client, "op_type": op_type})
         return redirect("client", pk=pk)
 
-    return render(request, "loyalty_programm/operation.html",
-                  {"client": client, "op_type": op_type})
+    return render(request, "loyalty_programm/visit_cancel.html", {
+        "client": client, "visit": visit,
+    })
+
+
+@login_required
+def grant_minutes_view(request, pk):
+    client = get_object_or_404(Client, pk=pk)
+
+    if request.method == "POST":
+        try:
+            minutes = int(request.POST.get("minutes", "0"))
+        except ValueError:
+            messages.error(request, "Минуты должны быть целым числом")
+            return render(request, "loyalty_programm/grant_minutes.html", {"client": client})
+        comment = request.POST.get("comment", "").strip()
+        try:
+            grant_minutes(client, minutes, admin=request.user, comment=comment)
+            messages.success(request, f"Назначено {minutes} минут")
+        except ValidationError as e:
+            messages.error(request, e.message)
+            return render(request, "loyalty_programm/grant_minutes.html", {"client": client})
+        return redirect("client", pk=pk)
+
+    return render(request, "loyalty_programm/grant_minutes.html", {"client": client})
 
 
 @login_required

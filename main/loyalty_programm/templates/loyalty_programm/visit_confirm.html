@@ -1,0 +1,28 @@
+{% extends "loyalty_programm/base.html" %}
+{% block title %}Подтверждение визита{% endblock %}
+{% block content %}
+<h1>Подтвердите визит</h1>
+
+<div class="card">
+  <table>
+    <tr><th>Цена визита</th><td>{{ summary.price }} ₽</td></tr>
+    <tr><th>К оплате деньгами</th><td>{{ summary.money_paid }} ₽</td></tr>
+    <tr><th>Минуты к списанию</th><td>{{ summary.minutes_used }} (останется {{ summary.minutes_after }})</td></tr>
+    <tr><th>Бонусы к списанию</th><td>{{ summary.bonuses_used }}</td></tr>
+    <tr><th>Процент кэшбека</th><td>{{ summary.cashback_percent }} %</td></tr>
+    <tr><th>Бонусов начислится</th><td>+{{ summary.cashback }}</td></tr>
+    <tr><th>Бонусы после</th><td>{{ summary.balance_after }} (было {{ summary.balance_before }})</td></tr>
+    <tr><th>Сумма оплат деньгами</th><td>{{ summary.total_paid_after }} ₽ (было {{ summary.total_paid_before }})</td></tr>
+  </table>
+</div>
+
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="confirm" value="1">
+  <input type="hidden" name="price" value="{{ summary.price }}">
+  <input type="hidden" name="bonuses_used" value="{{ summary.bonuses_used }}">
+  <input type="hidden" name="minutes_used" value="{{ summary.minutes_used }}">
+  <input type="hidden" name="comment" value="{{ comment }}">
+  <button class="btn green" type="submit">✅ Подтвердить и сохранить</button>
+  <a class="btn grey" href="{% url 'visit_create' client.pk %}">← Вернуться к форме</a>
+</form>
+{% endblock %}

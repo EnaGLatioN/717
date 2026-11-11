@@ -1,0 +1,22 @@
+{% extends "loyalty_programm/base.html" %}
+{% block title %}Отмена визита{% endblock %}
+{% block content %}
+<h1>Отменить визит?</h1>
+
+<div class="card">
+  <table>
+    <tr><th>Дата</th><td>{{ visit.created_at|date:"d.m.Y H:i" }}</td></tr>
+    <tr><th>Цена</th><td>{{ visit.price }} ₽</td></tr>
+    <tr><th>Бонусы списаны</th><td>{{ visit.bonuses_used }}</td></tr>
+    <tr><th>Бонусы начислены</th><td>+{{ visit.cashback }}</td></tr>
+    <tr><th>Минуты списаны</th><td>{{ visit.minutes_used }}</td></tr>
+    <tr><th>Деньги</th><td>{{ visit.money_paid }} ₽</td></tr>
+  </table>
+  <p>Балансы и сумма оплат вернутся к значениям до визита, уровень пересчитается.</p>
+</div>
+
+<form method="post">{% csrf_token %}
+  <button class="btn red" type="submit">✅ Отменить визит</button>
+  <a class="btn grey" href="{% url 'client' client.pk %}">← Назад</a>
+</form>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "loyalty_programm/base.html" %}
+{% block title %}Провести визит — {{ client.name }}{% endblock %}
+{% block content %}
+<h1>Провести визит</h1>
+
+<div class="card">
+  <p><b>{{ client.name }}</b> · {{ client.phone }}<br>
+     Бонусы: <b>{{ client.balance }}</b> · Минуты: <b>{{ client.minutes }}</b> ·
+     Уровень: <b>{{ client.get_level_display }} ({{ client.cashback_percent }}%)</b></p>
+</div>
+
+<div class="card">
+  <form method="post">{% csrf_token %}
+    <div class="form-row">
+      <label>Цена визита, ₽ (целое)</label>
+      <input type="number" name="price" min="0" required value="{{ form.price|default:'' }}" autofocus>
+    </div>
+    <div class="form-row">
+      <label>Бонусы к списанию (не больше половины чека и баланса)</label>
+      <input type="number" name="bonuses_used" min="0" value="{{ form.bonuses_used|default:'0' }}">
+    </div>
+    <div class="form-row">
+      <label>Минуты абонемента к списанию (не больше остатка)</label>
+      <input type="number" name="minutes_used" min="0" value="{{ form.minutes_used|default:'0' }}">
+    </div>
+    <div class="form-row">
+      <label>Комментарий</label>
+      <input type="text" name="comment" maxlength="255" value="{{ form.comment|default:'' }}">
+    </div>
+    <div class="actions" style="display:flex;gap:10px">
+      <button class="btn green" type="submit">Далее → подтверждение</button>
+      <a class="btn grey" href="{% url 'client' client.pk %}">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

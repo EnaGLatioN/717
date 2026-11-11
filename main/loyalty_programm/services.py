@@ -1,7 +1,9 @@
 import re
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from .models import Client, Operation
+from django.utils import timezone
+
+from .models import Client, Visit, MinuteGrant
 
 
 def normalize_phone(raw: str) -> str:
@@ -23,13 +25,8 @@ def format_phone(phone: str) -> str:
 
 
 def get_or_create_client(telegram_id: int, name: str, phone: str):
-    """
-    Возвращает (client, created, conflict), где conflict — чужой Client,
-    если этот номер уже занят другим telegram_id.
-    """
     phone = normalize_phone(phone)
 
-    # 1) по telegram_id
     client = Client.objects.filter(telegram_id=telegram_id).first()
     if client:
         if client.phone == phone:
@@ -41,7 +38,6 @@ def get_or_create_client(telegram_id: int, name: str, phone: str):
         client.save(update_fields=["phone"])
         return client, False, None
 
-    # 2) новый telegram_id — номер занят?
     by_phone = Client.objects.filter(phone=phone).first()
     if by_phone:
         return None, False, by_phone
@@ -51,9 +47,7 @@ def get_or_create_client(telegram_id: int, name: str, phone: str):
 
 
 def is_tg_admin(telegram_id: int) -> bool:
-    return Client.objects.filter(
-        telegram_id=telegram_id, is_bot_admin=True,
-    ).exists()
+    return Client.objects.filter(telegram_id=telegram_id, is_bot_admin=True).exists()
 
 
 @transaction.atomic
@@ -66,35 +60,141 @@ def change_status(client: Client, new_status: str) -> Client:
     return client
 
 
+# ---------- уровни ----------
+
+def calc_level(total_paid: int) -> str:
+    """Уровень по сумме оплат деньгами."""
+    for threshold, level, _ in Client.LEVEL_THRESHOLDS:
+        if total_paid >= threshold:
+            return level
+    return Client.LEVEL_STANDARD
+
+
+def calc_cashback(money: int, percent: int) -> int:
+    """Округление 0,5 вверх."""
+    # money и percent — целые. round half up: (money*percent + 50) // 100
+    return (money * percent + 50) // 100
+
+
+# ---------- проверки визита ----------
+
+def validate_visit_inputs(price: int, bonuses: int, minutes: int, client: Client):
+    if price < 0:
+        raise ValidationError("Цена визита не может быть отрицательной")
+    if bonuses < 0:
+        raise ValidationError("Бонусы к списанию не могут быть отрицательными")
+    if minutes < 0:
+        raise ValidationError("Минуты не могут быть отрицательными")
+    max_bonus_by_check = price // 2          # половина чека, округление вниз
+    if bonuses > max_bonus_by_check:
+        raise ValidationError(
+            f"Бонусами можно закрыть не больше половины чека: {max_bonus_by_check}"
+        )
+    if bonuses > client.balance:
+        raise ValidationError("Бонусов к списанию больше текущего баланса")
+    if minutes > client.minutes:
+        raise ValidationError("Минут к списанию больше остатка абонемента")
+
+
+def preview_visit(client: Client, price: int, bonuses: int, minutes: int) -> dict:
+    """Рассчитывает визит без сохранения. Для подтверждения в UI."""
+    validate_visit_inputs(price, bonuses, minutes, client)
+    money = price - bonuses
+    percent = Client.CASHBACK_BY_LEVEL[client.level]
+    cashback = calc_cashback(money, percent)
+    new_total_paid = client.total_paid + money
+    new_level = calc_level(new_total_paid)
+    return {
+        "price": price,
+        "bonuses_used": bonuses,
+        "minutes_used": minutes,
+        "money_paid": money,
+        "cashback_percent": percent,
+        "cashback": cashback,
+        "balance_before": client.balance,
+        "balance_after": client.balance - bonuses + cashback,
+        "minutes_before": client.minutes,
+        "minutes_after": client.minutes - minutes,
+        "total_paid_before": client.total_paid,
+        "total_paid_after": new_total_paid,
+        "level_before": client.level,
+        "level_after": new_level,   # для отображения «уровень вырастет»
+    }
+
+
+# ---------- визит ----------
+
 @transaction.atomic
-def accrue(client: Client, amount: int, admin=None, comment: str = "",
-           performed_by_tg: int | None = None):
-    if amount <= 0:
-        raise ValidationError("Сумма начисления должна быть больше нуля")
+def conduct_visit(client: Client, price: int, bonuses: int, minutes: int,
+                  admin=None, comment: str = "", performed_by_tg: int | None = None) -> Visit:
+    """Проводит визит. Процент кэшбека — по уровню ДО визита."""
     client = Client.objects.select_for_update().get(pk=client.pk)
-    before = client.balance
-    client.balance = before + amount
-    client.save(update_fields=["balance"])
-    return Operation.objects.create(
-        client=client, type=Operation.TYPE_ACCRUAL, amount=amount,
-        comment=comment, admin=admin, performed_by_tg=performed_by_tg,
-        balance_before=before, balance_after=client.balance,
+    validate_visit_inputs(price, bonuses, minutes, client)
+
+    money = price - bonuses
+    percent = Client.CASHBACK_BY_LEVEL[client.level]
+    cashback = calc_cashback(money, percent)
+
+    balance_before = client.balance
+    minutes_before = client.minutes
+    total_paid_before = client.total_paid
+
+    client.balance = balance_before - bonuses + cashback
+    client.minutes = minutes_before - minutes
+    client.total_paid = total_paid_before + money
+    client.level = calc_level(client.total_paid)  # после визита
+    client.save(update_fields=["balance", "minutes", "total_paid", "level"])
+
+    return Visit.objects.create(
+        client=client, admin=admin, performed_by_tg=performed_by_tg,
+        price=price, minutes_used=minutes, bonuses_used=bonuses,
+        money_paid=money, cashback_percent=percent, cashback=cashback,
+        balance_before=balance_before, balance_after=client.balance,
+        minutes_before=minutes_before, minutes_after=client.minutes,
+        total_paid_before=total_paid_before, total_paid_after=client.total_paid,
+        comment=comment, status=Visit.STATUS_DONE,
     )
 
 
 @transaction.atomic
-def write_off(client: Client, amount: int, admin=None, comment: str = "",
-              performed_by_tg: int | None = None):
-    if amount <= 0:
-        raise ValidationError("Сумма списания должна быть больше нуля")
+def cancel_visit(visit: Visit) -> Visit:
+    """Отменяет визит: возвращает минуты, бонусы, вычитает деньги из суммы уровня."""
+    if visit.status == Visit.STATUS_CANCELLED:
+        raise ValidationError("Визит уже отменён")
+
+    client = Client.objects.select_for_update().get(pk=visit.client_id)
+
+    # откатываем изменения
+    client.balance = client.balance + visit.bonuses_used - visit.cashback
+    client.minutes = client.minutes + visit.minutes_used
+    client.total_paid = client.total_paid - visit.money_paid
+    if client.balance < 0:
+        raise ValidationError(
+            "Нельзя отменить визит: бонусов на балансе не хватает "
+            "(часть начисленного кэшбека уже потрачена)"
+        )
+    client.level = calc_level(client.total_paid)
+    client.save(update_fields=["balance", "minutes", "total_paid", "level"])
+
+    visit.status = Visit.STATUS_CANCELLED
+    visit.cancelled_at = timezone.now()
+    visit.save(update_fields=["status", "cancelled_at"])
+    return visit
+
+
+# ---------- минуты ----------
+
+@transaction.atomic
+def grant_minutes(client: Client, minutes: int, admin=None, comment: str = "",
+                  performed_by_tg: int | None = None) -> MinuteGrant:
+    if minutes <= 0:
+        raise ValidationError("Количество минут должно быть больше нуля")
     client = Client.objects.select_for_update().get(pk=client.pk)
-    if amount > client.balance:
-        raise ValidationError("Списание больше текущего баланса")
-    before = client.balance
-    client.balance = before - amount
-    client.save(update_fields=["balance"])
-    return Operation.objects.create(
-        client=client, type=Operation.TYPE_WRITE_OFF, amount=amount,
-        comment=comment, admin=admin, performed_by_tg=performed_by_tg,
-        balance_before=before, balance_after=client.balance,
+    before = client.minutes
+    client.minutes = before + minutes
+    client.save(update_fields=["minutes"])
+    return MinuteGrant.objects.create(
+        client=client, admin=admin, performed_by_tg=performed_by_tg,
+        minutes=minutes, comment=comment,
+        minutes_before=before, minutes_after=client.minutes,
     )
