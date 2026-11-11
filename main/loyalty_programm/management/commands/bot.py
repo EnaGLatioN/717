@@ -1,3 +1,5 @@
+import html
+
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from django.core.management.base import BaseCommand
@@ -9,6 +11,11 @@ from loyalty_programm.services import (
 )
 
 from . import admin_handlers
+
+
+def esc(text) -> str:
+    """Экранирует текст для Telegram HTML parse_mode."""
+    return html.escape(str(text if text is not None else ""), quote=False)
 
 
 def main_keyboard(client: Client | None = None, is_admin: bool = False):
@@ -38,8 +45,6 @@ class Command(BaseCommand):
         return main_keyboard(client=client, is_admin=is_tg_admin(tg_id))
 
     def _edit_or_send(self, message, text, reply_markup=None):
-        # используем общее «живое» сообщение из AdminContext,
-        # чтобы гость и админ не заводили по два сообщения
         chat_id = message.chat.id
         prev_id = self.ctx.live_msg.get(chat_id)
         if prev_id:
@@ -59,20 +64,20 @@ class Command(BaseCommand):
         self.ctx.live_msg[chat_id] = sent.message_id
 
     def _render_client_card(self, client: Client) -> str:
-        next_level, left = client.next_level_info()
+        next_level, left = client.next_level_info()          # ← скобки!
         lines = [
-            f"👤 <b>{client.name}</b>",
-            f"📞 {format_phone(client.phone)}",
+            f"👤 <b>{esc(client.name)}</b>",
+            f"📞 {esc(format_phone(client.phone))}",
             "",
             f"💳 Бонусы: <b>{client.balance}</b>",
             f"⏱ Минуты абонемента: <b>{client.minutes}</b>",
-            f"🏅 Уровень: <b>{client.get_level_display}</b> "
+            f"🏅 Уровень: <b>{esc(client.get_level_display())}</b> "
             f"({client.cashback_percent}% кэшбека)",
             f"💰 Оплачено деньгами: <b>{client.total_paid} ₽</b>",
         ]
         if next_level:
             level_label = dict(Client.LEVEL_CHOICES)[next_level]
-            lines.append(f"📈 До уровня «{level_label}»: <b>{left} ₽</b>")
+            lines.append(f"📈 До уровня «{esc(level_label)}»: <b>{left} ₽</b>")
         else:
             lines.append("🏆 Максимальный уровень")
         lines.append("")
@@ -102,7 +107,7 @@ class Command(BaseCommand):
             kb.add(KeyboardButton("📱 Поделиться контактом", request_contact=True))
             self._edit_or_send(
                 message,
-                f"👋 <b>{name}</b>, добро пожаловать в программу лояльности!\n\n"
+                f"👋 <b>{esc(name)}</b>, добро пожаловать в программу лояльности!\n\n"
                 f"Нажмите «Поделиться контактом», чтобы зарегистрироваться.",
                 reply_markup=kb,
             )
@@ -136,7 +141,8 @@ class Command(BaseCommand):
             if existing and existing.phone:
                 self._edit_or_send(
                     message,
-                    f"ℹ️ У вас уже привязан номер <b>{format_phone(existing.phone)}</b>.\n"
+                    f"ℹ️ У вас уже привязан номер "
+                    f"<b>{esc(format_phone(existing.phone))}</b>.\n"
                     f"Если нужно изменить — обратитесь к администратору.\n\n"
                     + self._render_client_card(existing),
                     reply_markup=self._kb_for(tg_id),
@@ -160,7 +166,7 @@ class Command(BaseCommand):
                 )
             except Exception as e:
                 self._edit_or_send(
-                    message, f"Не удалось сохранить номер: {e}",
+                    message, f"Не удалось сохранить номер: {esc(e)}",
                     reply_markup=self._kb_for(tg_id),
                 )
                 return
@@ -169,7 +175,7 @@ class Command(BaseCommand):
                 self._edit_or_send(
                     message,
                     f"❌ <b>Этот номер уже привязан к другому пользователю.</b>\n\n"
-                    f"📞 {format_phone(conflict.phone)}\n\n"
+                    f"📞 {esc(format_phone(conflict.phone))}\n\n"
                     f"Регистрация невозможна. Если это ошибка — обратитесь к администратору.",
                     reply_markup=self._kb_for(tg_id),
                 )
@@ -236,14 +242,14 @@ class Command(BaseCommand):
                         parts.append(f"−{v.minutes_used} мин.")
                     parts.append(f"+{v.cashback} бон.")
                     if v.comment:
-                        parts.append(f"— {v.comment}")
+                        parts.append(f"— {esc(v.comment)}")
                     lines.append("  ".join(parts))
 
             if grants:
                 lines.append("\n⏱ <b>Назначения минут:</b>\n")
                 for g in grants:
                     dt = g.created_at.strftime("%d.%m.%Y")
-                    cmt = f" — {g.comment}" if g.comment else ""
+                    cmt = f" — {esc(g.comment)}" if g.comment else ""
                     lines.append(f"{dt}  +{g.minutes} мин.{cmt}")
 
             lines.append(

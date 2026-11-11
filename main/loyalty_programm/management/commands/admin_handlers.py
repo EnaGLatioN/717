@@ -1,14 +1,15 @@
 """
 Админ-функционал Telegram-бота (полный, под новое ТЗ).
 
-- Навигация (меню, карточка, история, статус, поиск, recent, stats)
-  редактирует ОДНО живое сообщение в чате.
-- Результаты операций — короткий push (ephemeral), удаляется при
-  следующем действии.
-- Проведение визита идёт в 2 шага: форма → саммари → подтверждение.
-  Сохранение только по кнопке «Подтвердить».
-- Отмена визита, назначение минут — с подтверждением.
+Всё «навигационное» (меню, карточка, поиск, история, статус, recent, stats)
+редактирует ОДНО живое сообщение в чате. Результаты операций — короткий
+push (ephemeral), удаляется при следующем действии.
+
+Проведение визита — 2 шага: форма → саммари → подтверждение.
+Сохранение только по кнопке «Подтвердить».
 """
+import html
+
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from django.core.exceptions import ValidationError
 
@@ -20,12 +21,17 @@ from loyalty_programm.services import (
 )
 
 
+def esc(text) -> str:
+    """Экранирует текст для Telegram HTML parse_mode."""
+    return html.escape(str(text if text is not None else ""), quote=False)
+
+
 class AdminContext:
     def __init__(self, bot):
         self.bot = bot
-        self.live_msg: dict[int, int] = {}       # {chat_id: message_id}
+        self.live_msg: dict[int, int] = {}
         self.ephemeral_msg: dict[int, int] = {}
-        self.state: dict[int, dict] = {}         # {tg_id: {"step":..., "data":{...}}}
+        self.state: dict[int, dict] = {}
 
     # ---------- helpers ----------
 
@@ -110,29 +116,30 @@ class AdminContext:
     # ---------- карточка ----------
 
     def show_client_card(self, chat_id, client: Client):
-        next_level, left = client.next_level_info()
+        next_level, left = client.next_level_info()          # ← скобки!
         admin_mark = " ✅" if client.is_bot_admin else ""
         block_mark = " 🚫" if client.is_blocked else ""
 
         lines = [
-            f"👤 <b>{client.name}</b>{admin_mark}{block_mark}",
-            f"📞 {format_phone(client.phone)}",
+            f"👤 <b>{esc(client.name)}</b>{admin_mark}{block_mark}",
+            f"📞 {esc(format_phone(client.phone))}",
             f"🆔 TG: <code>{client.telegram_id}</code>",
             "",
             f"💳 Бонусы: <b>{client.balance}</b>",
             f"⏱ Минуты: <b>{client.minutes}</b>",
-            f"🏅 Уровень: <b>{client.get_level_display}</b> "
+            f"🏅 Уровень: <b>{esc(client.get_level_display())}</b> "
             f"({client.cashback_percent}% кэшбека)",
             f"💰 Оплачено деньгами: <b>{client.total_paid} ₽</b>",
         ]
         if next_level:
+            level_label = dict(Client.LEVEL_CHOICES)[next_level]
             lines.append(
-                f"📈 До «{dict(Client.LEVEL_CHOICES)[next_level]}»: <b>{left} ₽</b>"
+                f"📈 До «{esc(level_label)}»: <b>{left} ₽</b>"
             )
         else:
             lines.append("🏆 Максимальный уровень")
         lines.append("")
-        lines.append(f"🏷 Статус: {client.get_status_display()}")
+        lines.append(f"🏷 Статус: {esc(client.get_status_display())}")
         lines.append(f"📅 С нами с: {client.created_at.strftime('%d.%m.%Y')}")
 
         visits = list(client.visits.order_by("-created_at")[:5])
@@ -170,9 +177,10 @@ class AdminContext:
             return
         self._edit(
             chat_id,
-            f"🧾 <b>Визит — {client.name}</b>\n"
+            f"🧾 <b>Визит — {esc(client.name)}</b>\n"
             f"Баланс: {client.balance} бон. · Минуты: {client.minutes}\n"
-            f"Уровень: {client.get_level_display} ({client.cashback_percent}%)\n\n"
+            f"Уровень: {esc(client.get_level_display())} "
+            f"({client.cashback_percent}%)\n\n"
             f"Введите <b>цену визита</b> в ₽ (целое число):",
             reply_markup=InlineKeyboardMarkup().add(
                 InlineKeyboardButton("❌ Отмена", callback_data=f"adm_view_{client.pk}"),
@@ -254,11 +262,11 @@ class AdminContext:
         minutes = int(raw)
         client = Client.objects.get(pk=client_pk)
 
-        # валидируем на лету, чтобы не гонять пользователя по кругу
+        # валидируем на лету
         try:
             preview_visit(client, data["price"], data["bonuses"], minutes)
         except ValidationError as e:
-            self._edit(chat_id, f"❌ {e.message}\n\nВведите минуты ещё раз:")
+            self._edit(chat_id, f"❌ {esc(e.message)}\n\nВведите минуты ещё раз:")
             return
 
         self._edit(
@@ -291,7 +299,7 @@ class AdminContext:
         try:
             s = preview_visit(client, price, bonuses, minutes)
         except ValidationError as e:
-            self._edit(chat_id, f"❌ {e.message}")
+            self._edit(chat_id, f"❌ {esc(e.message)}")
             self._reset_state(chat_id)
             return
 
@@ -299,12 +307,12 @@ class AdminContext:
         if s["level_after"] != s["level_before"]:
             level_up_mark = (
                 f"\n🎉 После визита: <b>"
-                f"{dict(Client.LEVEL_CHOICES)[s['level_after']]}</b>"
+                f"{esc(dict(Client.LEVEL_CHOICES)[s['level_after']])}</b>"
             )
 
         text = (
             f"🧾 <b>Проверьте визит</b>\n\n"
-            f"👤 {client.name} · {format_phone(client.phone)}\n\n"
+            f"👤 {esc(client.name)} · {esc(format_phone(client.phone))}\n\n"
             f"Цена визита:        <b>{s['price']} ₽</b>\n"
             f"К оплате деньгами:  <b>{s['money_paid']} ₽</b>\n"
             f"Минуты к списанию:  <b>{s['minutes_used']}</b> "
@@ -317,7 +325,7 @@ class AdminContext:
             f"Оплачено деньгами:  <b>{s['total_paid_after']} ₽</b> "
             f"(было {s['total_paid_before']})"
             f"{level_up_mark}\n\n"
-            f"Комментарий: {comment or '—'}"
+            f"Комментарий: {esc(comment) or '—'}"
         )
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(
@@ -352,7 +360,7 @@ class AdminContext:
             self._reset_state(chat_id)
             return
         except ValidationError as e:
-            self._edit(chat_id, f"❌ {e.message}")
+            self._edit(chat_id, f"❌ {esc(e.message)}")
             self._reset_state(chat_id)
             return
 
@@ -380,7 +388,7 @@ class AdminContext:
             return
         text = (
             f"❌ <b>Отменить визит?</b>\n\n"
-            f"👤 {client.name}\n"
+            f"👤 {esc(client.name)}\n"
             f"📅 {visit.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"Цена:     <b>{visit.price} ₽</b>\n"
             f"Бонусы:   −{visit.bonuses_used} / +{visit.cashback}\n"
@@ -406,7 +414,7 @@ class AdminContext:
         try:
             cancel_visit(visit)
         except ValidationError as e:
-            self._edit(chat_id, f"❌ {e.message}")
+            self._edit(chat_id, f"❌ {esc(e.message)}")
             return
         client.refresh_from_db()
         self._push(chat_id, "✅ Визит отменён, балансы восстановлены.")
@@ -423,7 +431,7 @@ class AdminContext:
         self._edit(
             chat_id,
             f"⏱ <b>Назначить минуты</b>\n\n"
-            f"👤 {client.name}\n"
+            f"👤 {esc(client.name)}\n"
             f"Остаток: <b>{client.minutes}</b>\n\n"
             f"Введите <b>количество минут</b> (целое > 0):",
             reply_markup=InlineKeyboardMarkup().add(
@@ -450,7 +458,7 @@ class AdminContext:
             client = Client.objects.get(pk=client_pk)
             grant_minutes(client, minutes, admin=None, performed_by_tg=admin_tg_id)
         except ValidationError as e:
-            self._edit(chat_id, f"❌ {e.message}")
+            self._edit(chat_id, f"❌ {esc(e.message)}")
             self._reset_state(chat_id)
             return
         self._reset_state(chat_id)
@@ -474,7 +482,7 @@ class AdminContext:
         visits = list(client.visits.order_by("-created_at")[:20])
         grants = list(client.minute_grants.order_by("-created_at")[:10])
 
-        lines = [f"📜 <b>История — {client.name}</b>\n"]
+        lines = [f"📜 <b>История — {esc(client.name)}</b>\n"]
         if visits:
             lines.append("<b>Визиты:</b>")
             for v in visits:
@@ -482,9 +490,10 @@ class AdminContext:
                 if v.status == Visit.STATUS_CANCELLED:
                     lines.append(f"{dt}  <s>{v.price}₽</s> <i>отменён</i>")
                 else:
+                    cmt = f" — {esc(v.comment)}" if v.comment else ""
                     lines.append(
                         f"{dt}  {v.price}₽ −{v.bonuses_used}б "
-                        f"−{v.minutes_used}м +{v.cashback}б"
+                        f"−{v.minutes_used}м +{v.cashback}б{cmt}"
                     )
         else:
             lines.append("— визитов нет —")
@@ -493,11 +502,10 @@ class AdminContext:
             lines.append("\n<b>Назначения минут:</b>")
             for g in grants:
                 dt = g.created_at.strftime("%d.%m.%Y")
-                cmt = f" — {g.comment}" if g.comment else ""
+                cmt = f" — {esc(g.comment)}" if g.comment else ""
                 lines.append(f"{dt}  +{g.minutes} мин.{cmt}")
 
         kb = InlineKeyboardMarkup(row_width=2)
-        # кнопки отмены активных визитов (по одной на визит)
         active_visits = [v for v in visits if v.status == Visit.STATUS_DONE]
         for v in active_visits[:5]:
             kb.add(InlineKeyboardButton(
@@ -521,8 +529,8 @@ class AdminContext:
         kb.add(InlineKeyboardButton("🔙 Назад", callback_data=f"adm_view_{client.pk}"))
         self._edit(
             chat_id,
-            f"🏷 <b>{client.name}</b>\n"
-            f"Текущий статус: {client.get_status_display()}\n\n"
+            f"🏷 <b>{esc(client.name)}</b>\n"
+            f"Текущий статус: {esc(client.get_status_display())}\n\n"
             f"Выберите новый статус:",
             reply_markup=kb,
         )
@@ -532,7 +540,7 @@ class AdminContext:
             client = Client.objects.get(pk=client_pk)
             change_status(client, new_status)
             client.refresh_from_db()
-            self._push(chat_id, f"✅ Статус: <b>{client.get_status_display()}</b>")
+            self._push(chat_id, f"✅ Статус: <b>{esc(client.get_status_display())}</b>")
             self.show_client_card(chat_id, client)
         except (Client.DoesNotExist, ValidationError):
             self._edit(chat_id, "❌ Не удалось сменить статус.")
@@ -550,7 +558,7 @@ class AdminContext:
             block = " 🚫" if c.is_blocked else ""
             kb.add(InlineKeyboardButton(
                 f"{c.name} — {format_phone(c.phone)} "
-                f"[{c.get_level_display} · {c.balance}б]{mark}{block}",
+                f"[{c.get_level_display()} · {c.balance}б]{mark}{block}",
                 callback_data=f"adm_view_{c.pk}",
             ))
         kb.add(InlineKeyboardButton("🔙 В меню", callback_data="adm_menu"))
@@ -631,8 +639,6 @@ def register(bot, ctx: AdminContext, edit_or_send=None, send_ephemeral=None):
             return False
         return True
 
-    # ---- меню / навигация ----
-
     @bot.callback_query_handler(func=lambda c: c.data == "adm_menu")
     def _adm_menu(call):
         if not guard(call): return
@@ -668,8 +674,6 @@ def register(bot, ctx: AdminContext, edit_or_send=None, send_ephemeral=None):
             return
         ctx.show_client_card(call.from_user.id, client)
         bot.answer_callback_query(call.id)
-
-    # ---- визит ----
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("adm_visit_")
                                        and c.data != "adm_visit_confirm"
@@ -708,8 +712,6 @@ def register(bot, ctx: AdminContext, edit_or_send=None, send_ephemeral=None):
         ctx.apply_visit(call.from_user.id, call.from_user.id)
         bot.answer_callback_query(call.id, "Сохранено")
 
-    # ---- отмена визита ----
-
     @bot.callback_query_handler(func=lambda c: c.data.startswith("adm_cancel_ask_"))
     def _adm_cancel_ask(call):
         if not guard(call): return
@@ -729,16 +731,12 @@ def register(bot, ctx: AdminContext, edit_or_send=None, send_ephemeral=None):
         ctx.do_cancel_visit(call.from_user.id, visit_pk)
         bot.answer_callback_query(call.id, "Отменено")
 
-    # ---- минуты ----
-
     @bot.callback_query_handler(func=lambda c: c.data.startswith("adm_min_"))
     def _adm_min(call):
         if not guard(call): return
         pk = int(call.data.replace("adm_min_", ""))
         ctx.ask_minutes(call.from_user.id, pk)
         bot.answer_callback_query(call.id)
-
-    # ---- статус ----
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("adm_status_"))
     def _adm_status(call):
@@ -758,8 +756,6 @@ def register(bot, ctx: AdminContext, edit_or_send=None, send_ephemeral=None):
             return
         ctx.do_set_status(call.from_user.id, pk, status)
         bot.answer_callback_query(call.id)
-
-    # ---- история ----
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("adm_hist_"))
     def _adm_hist(call):
