@@ -30,11 +30,19 @@ def client_detail(request, pk):
     client = get_object_or_404(Client, pk=pk)
     visits = client.visits.order_by("-created_at")
     grants = client.minute_grants.order_by("-created_at")
-    return render(request, "loyalty_programm/client.html", {
-        "client": client, "visits": visits, "grants": grants,
-        "next_level": client.next_level_info(),
-    })
 
+    next_key, left = client.next_level_info()
+    if next_key:
+        next_level = (dict(Client.LEVEL_CHOICES)[next_key], left)  # ← русское название
+    else:
+        next_level = (None, 0)
+
+    return render(request, "loyalty_programm/client.html", {
+        "client": client,
+        "visits": visits,
+        "grants": grants,
+        "next_level": next_level,
+    })
 
 @login_required
 def visit_create(request, pk):
