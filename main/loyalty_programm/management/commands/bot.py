@@ -76,7 +76,7 @@ class Command(BaseCommand):
         ]
         if next_level:
             level_label = dict(Client.LEVEL_CHOICES)[next_level]
-            lines.append(f"📈 До уровня «{esc(level_label)}»: <b>{left} ₽</b>")
+            lines.append(f"📈 Следующий уровень «{esc(level_label)}».>")
         else:
             lines.append("🏆 Максимальный уровень")
         lines.append("")
