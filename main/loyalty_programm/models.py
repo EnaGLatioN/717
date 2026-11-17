@@ -116,7 +116,7 @@ class Client(models.Model):
         next_level = order[idx + 1]
         threshold = dict((lvl, thr) for thr, lvl, _ in self.LEVEL_THRESHOLDS)[next_level]
         left = max(0, threshold - self.total_paid)
-        return next_level, left
+        return  dict(self.LEVEL_CHOICES)[next_level], left
 
 
 class Visit(models.Model):

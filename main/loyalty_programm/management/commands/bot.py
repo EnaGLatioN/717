@@ -73,7 +73,6 @@ class Command(BaseCommand):
             f"⏱ Минуты абонемента: <b>{client.minutes}</b>",
             f"🏅 Уровень: <b>{esc(client.get_level_display())}</b> "
             f"({client.cashback_percent}% кэшбека)",
-            f"💰 Оплачено деньгами: <b>{client.total_paid} ₽</b>",
         ]
         if next_level:
             level_label = dict(Client.LEVEL_CHOICES)[next_level]
